@@ -6,8 +6,11 @@ namespace MetroOsd;
 
 /// <summary>
 /// Wires the keyboard hook to the native OSD watcher and the overlay form.
-/// Positioning: native OSD visible → overlay directly below it; hidden → overlay at the native
-/// OSD's own position. No native OSD captured yet → nothing is shown.
+///
+/// The new OSD is independent: it always answers CapsLock. When the native OSD has been
+/// captured it is positioned relative to it (below when visible, at its spot when hidden);
+/// otherwise it uses the native OSD's usual spot (top-left). When the native OSD becomes
+/// visible while our overlay is up, the overlay is moved directly below it.
 /// </summary>
 internal sealed class OsdController : IDisposable
 {
@@ -26,6 +29,8 @@ internal sealed class OsdController : IDisposable
 
     public void Start()
     {
+        _watcher.NativeOsdVisible += OnNativeOsdVisible;
+        _watcher.NativeOsdHidden += OnNativeOsdHidden;
         _watcher.Start();
         _keyboardHook.KeyPressed += OnKeyPressed;
         Log.Info("started");
@@ -34,22 +39,60 @@ internal sealed class OsdController : IDisposable
     private void OnKeyPressed()
     {
         bool capsOn = (PInvoke.GetKeyState((int)VIRTUAL_KEY.VK_CAPITAL) & 1) != 0;
-        string text = capsOn ? "Caps Lock ON" : "Caps Lock OFF";
+        string text = capsOn ? Resources.CapsLockOn : Resources.CapsLockOff;
 
-        if (!_watcher.TryGetPlacement(out RECT rect, out bool nativeVisible))
+        Point pos;
+        if (_watcher.TryGetPlacement(out RECT rect, out bool nativeVisible))
         {
-            Log.Info($"caps={capsOn}: skipped (native OSD not captured yet)");
+            pos = nativeVisible ? Below(rect) : At(rect);
+            Log.Info($"caps={capsOn}: nativeVisible={nativeVisible}, pos=({pos.X},{pos.Y}), nativeRect=({rect.left},{rect.top},{rect.right},{rect.bottom})");
+        }
+        else
+        {
+            // Native OSD not captured: the new OSD stands alone at the native OSD's usual spot.
+            pos = DefaultPosition();
+            Log.Info($"caps={capsOn}: native OSD not captured, using default pos=({pos.X},{pos.Y})");
+        }
+
+        _form.ShowOsd(text, pos);
+    }
+
+    private void OnNativeOsdVisible(RECT rect)
+    {
+        // Native OSD just showed while our overlay is up: move it directly below.
+        if (!_form.Visible)
+        {
             return;
         }
 
-        int x = rect.left;
-        int y = nativeVisible ? rect.bottom + Gap : rect.top;
-        Log.Info($"caps={capsOn}: nativeVisible={nativeVisible}, pos=({x},{y}), nativeRect=({rect.left},{rect.top},{rect.right},{rect.bottom})");
-        _form.ShowOsd(text, new Point(x, y));
+        Point pos = Below(rect);
+        Log.Info($"native OSD visible -> reposition overlay to ({pos.X},{pos.Y})");
+        _form.MoveTo(pos);
     }
+
+    private void OnNativeOsdHidden(RECT rect)
+    {
+        // Native OSD just hid while our overlay is up: move it up to the native spot.
+        if (!_form.Visible)
+        {
+            return;
+        }
+
+        Point pos = At(rect);
+        Log.Info($"native OSD hidden -> reposition overlay to ({pos.X},{pos.Y})");
+        _form.MoveTo(pos);
+    }
+
+    private Point Below(RECT rect) => new(rect.left, rect.bottom + Gap);
+
+    private Point At(RECT rect) => new(rect.left, rect.top);
+
+    private static Point DefaultPosition() => new(62, 75);
 
     public void Dispose()
     {
+        _watcher.NativeOsdVisible -= OnNativeOsdVisible;
+        _watcher.NativeOsdHidden -= OnNativeOsdHidden;
         _keyboardHook.Dispose();
         _watcher.Dispose();
         _form.Dispose();

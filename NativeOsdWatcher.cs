@@ -8,15 +8,18 @@ using Windows.Win32.UI.WindowsAndMessaging;
 namespace MetroOsd;
 
 /// <summary>
-/// Tracks the explorer-owned native OSD window (class <c>NativeHWNDHost</c>, parent = Desktop,
-/// no caption, child <c>DirectUIHWND</c>).
+/// Tracks the explorer-owned native OSD window (class <c>NativeHWNDHost</c>, no caption,
+/// usually with a <c>DirectUIHWND</c> child).
 ///
-/// Robust discovery strategy (the OSD is created lazily on the first key event and then kept
-/// alive, so a pure EVENT_OBJECT_CREATE wait deadlocks once the OSD already exists):
-///  - ONE always-on WinEvent hook over CREATE..HIDE (0x8000..0x8003);
-///  - every event for a <c>NativeHWNDHost</c> window is validated and may capture it
-///    (CREATE captures a fresh OSD; SHOW captures a pre-existing OSD the moment it appears);
-///  - DESTROY invalidates and the next key event re-scans (EnumWindows) as a fallback.
+/// Discovery notes:
+///  - The OSD is created lazily on the first key event and then kept alive (hidden).
+///  - While hidden the <c>DirectUIHWND</c> child may not exist yet, so the child must NOT be a
+///    hard requirement: a childless candidate is accepted at startup and re-validated when it
+///    first shows (the child appears by then).
+///  - The window may not be a top-level window, so event-based capture does not require
+///    top-level; the startup EnumWindows scan naturally sees only top-levels.
+///  - One always-on WinEvent hook (CREATE..HIDE) plus an EnumWindows re-scan fallback on every
+///    key event keeps the handle fresh across explorer restarts.
 /// </summary>
 internal sealed class NativeOsdWatcher : IDisposable
 {
@@ -36,6 +39,12 @@ internal sealed class NativeOsdWatcher : IDisposable
     private HWND _hwnd;
     private RECT _rect;
     private HWINEVENTHOOK _hook;
+
+    /// <summary>Raised with the fresh rect when the captured native OSD becomes visible.</summary>
+    public event Action<RECT>? NativeOsdVisible;
+
+    /// <summary>Raised with the last known rect when the captured native OSD hides.</summary>
+    public event Action<RECT>? NativeOsdHidden;
 
     public NativeOsdWatcher()
     {
@@ -60,7 +69,7 @@ internal sealed class NativeOsdWatcher : IDisposable
 
         if (FindExisting())
         {
-            Log.Info($"native OSD found on startup: hwnd={HwndHex(_hwnd)}, rect={_rect}");
+            Log.Info($"native OSD captured on startup: hwnd={HwndHex(_hwnd)}, owner={OwnerName(_hwnd)}, hasChild={HasDirectUIHWNDChild(_hwnd)}, rect={_rect}");
         }
         else
         {
@@ -70,7 +79,8 @@ internal sealed class NativeOsdWatcher : IDisposable
 
     /// <summary>
     /// Latest native OSD placement plus live visibility. Re-scans once when the captured handle
-    /// is gone. Returns false only when no OSD is known at all (caller must then not show).
+    /// is gone. Returns false only when no OSD is known at all (caller then uses its own
+    /// default position).
     /// </summary>
     public bool TryGetPlacement(out RECT rect, out bool visible)
     {
@@ -91,37 +101,58 @@ internal sealed class NativeOsdWatcher : IDisposable
         return true;
     }
 
+    /// <summary>
+    /// Scans top-level windows for the OSD. Prefers a candidate that already has a
+    /// DirectUIHWND child; accepts a childless candidate only when no better one exists.
+    /// </summary>
     private bool FindExisting()
     {
-        HWND found = default;
+        HWND withChild = default;
+        HWND childlessExplorer = default;
+        HWND childlessAny = default;
+
         PInvoke.EnumWindows((hwnd, _) =>
         {
-            if (IsOsdWindowCore(hwnd))
+            if (!IsOsdWindowCore(hwnd))
             {
-                found = hwnd;
-                return false; // stop enumerating
+                return true;
+            }
+
+            if (HasDirectUIHWNDChild(hwnd))
+            {
+                withChild = hwnd;
+                return false; // best match, stop
+            }
+
+            string? owner = GetOwnerProcessName(hwnd);
+            if (string.Equals(owner, "explorer", StringComparison.OrdinalIgnoreCase) && childlessExplorer.IsNull)
+            {
+                childlessExplorer = hwnd;
+            }
+            if (childlessAny.IsNull)
+            {
+                childlessAny = hwnd;
             }
             return true;
         }, default);
 
-        if (!found.IsNull)
-        {
-            _hwnd = found;
-            PInvoke.GetWindowRect(found, out _rect);
-            return true;
-        }
-        return false;
-    }
-
-    private bool IsOsdWindowCore(HWND hwnd)
-    {
-        // Must be a top-level window (parent = Desktop). EnumWindows only yields top-level
-        // windows, but WinEvent callbacks also see children, so verify explicitly.
-        if (!PInvoke.GetParent(hwnd).IsNull)
+        HWND found = !withChild.IsNull ? withChild : !childlessExplorer.IsNull ? childlessExplorer : childlessAny;
+        if (found.IsNull)
         {
             return false;
         }
 
+        _hwnd = found;
+        PInvoke.GetWindowRect(found, out _rect);
+        return true;
+    }
+
+    /// <summary>
+    /// Relaxed identification: class NativeHWNDHost + no caption + DirectUIHWND child.
+    /// No top-level requirement (event capture must also accept non-top-level OSD hosts).
+    /// </summary>
+    private bool IsOsdWindowCore(HWND hwnd)
+    {
         Span<char> buf = stackalloc char[256];
         int len = PInvoke.GetClassName(hwnd, buf);
         if (len <= 0 || new string(buf[..len]) != OsdClassName)
@@ -137,13 +168,16 @@ internal sealed class NativeOsdWatcher : IDisposable
         }
 
         // Must host a DirectUIHWND child.
-        if (PInvoke.FindWindowEx(hwnd, HWND.Null, ChildClassName, null).IsNull)
+        if (!HasDirectUIHWNDChild(hwnd))
         {
             return false;
         }
 
         return true;
     }
+
+    private static bool HasDirectUIHWNDChild(HWND hwnd)
+        => !PInvoke.FindWindowEx(hwnd, HWND.Null, ChildClassName, null).IsNull;
 
     private void OnWinEvent(
         HWINEVENTHOOK hWinEventHook,
@@ -174,33 +208,30 @@ internal sealed class NativeOsdWatcher : IDisposable
                 return;
             }
 
-            _hwnd = hwnd;
-            PInvoke.GetWindowRect(hwnd, out _rect);
-            Log.Info($"native OSD captured (CREATE): hwnd={HwndHex(hwnd)}, owner={OwnerName(hwnd)}, rect={_rect}");
+            Capture(hwnd, "CREATE");
         }
         else if (@event == EVENT_OBJECT_SHOW)
         {
             if (_hwnd.IsNull || hwnd != _hwnd)
             {
-                // Pre-existing OSD that we have not captured yet -> capture on first show.
+                // Pre-existing OSD we have not captured yet -> capture on first show.
                 if (!IsOsdWindowCore(hwnd))
                 {
                     return;
                 }
-                _hwnd = hwnd;
-                PInvoke.GetWindowRect(hwnd, out _rect);
-                Log.Info($"native OSD captured (SHOW): hwnd={HwndHex(hwnd)}, owner={OwnerName(hwnd)}, rect={_rect}");
-                return;
+                Capture(hwnd, "SHOW");
             }
 
             PInvoke.GetWindowRect(hwnd, out _rect);
             Log.Info("native OSD visible");
+            NativeOsdVisible?.Invoke(_rect);
         }
         else if (@event == EVENT_OBJECT_HIDE)
         {
             if (hwnd == _hwnd)
             {
                 Log.Info("native OSD hidden");
+                NativeOsdHidden?.Invoke(_rect);
             }
         }
         else if (@event == EVENT_OBJECT_DESTROY)
@@ -211,6 +242,13 @@ internal sealed class NativeOsdWatcher : IDisposable
                 _hwnd = default;
             }
         }
+    }
+
+    private void Capture(HWND hwnd, string via)
+    {
+        _hwnd = hwnd;
+        PInvoke.GetWindowRect(hwnd, out _rect);
+        Log.Info($"native OSD captured ({via}): hwnd={HwndHex(hwnd)}, owner={OwnerName(hwnd)}, hasChild={HasDirectUIHWNDChild(hwnd)}, rect={_rect}");
     }
 
     private static unsafe string HwndHex(HWND hwnd) => $"0x{(nint)hwnd.Value:X}";
@@ -228,6 +266,19 @@ internal sealed class NativeOsdWatcher : IDisposable
         }
     }
 
+    private static string? GetOwnerProcessName(HWND hwnd)
+    {
+        PInvoke.GetWindowThreadProcessId(hwnd, out uint pid);
+        try
+        {
+            return Process.GetProcessById((int)pid).ProcessName;
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+    }
+
     public void Dispose()
     {
         if (!_hook.IsNull)
@@ -237,4 +288,3 @@ internal sealed class NativeOsdWatcher : IDisposable
         }
     }
 }
-

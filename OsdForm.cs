@@ -30,7 +30,7 @@ internal sealed class OsdForm : Form
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleCenter,
             AutoSize = false,
-            Font = new Font("Segoe UI", 14f, FontStyle.Bold),
+            Font = new Font("Segoe UI", 14f, FontStyle.Regular),
             BackColor = BackColor,
             ForeColor = ForeColor,
         };
@@ -56,14 +56,20 @@ internal sealed class OsdForm : Form
         Size content = TextRenderer.MeasureText(text, _label.Font);
         ClientSize = new Size(content.Width + 2 * PaddingX, content.Height + 2 * PaddingY);
 
+        MoveTo(location);
+
+        _timer.Stop();
+        Show();
+        _timer.Start();
+    }
+
+    /// <summary>Repositions an already-visible overlay (keeps size and hide timer).</summary>
+    public void MoveTo(Point location)
+    {
         // Keep the overlay inside the working area in case the native OSD sits near an edge.
         Rectangle wa = Screen.FromPoint(location).WorkingArea;
         int x = Math.Clamp(location.X, wa.Left, Math.Max(wa.Left, wa.Right - Width));
         int y = Math.Clamp(location.Y, wa.Top, Math.Max(wa.Top, wa.Bottom - Height));
         Location = new Point(x, y);
-
-        _timer.Stop();
-        Show();
-        _timer.Start();
     }
 }
