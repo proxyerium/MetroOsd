@@ -1,17 +1,34 @@
-namespace MetroOsd
+using Windows.Win32;
+
+namespace MetroOsd;
+
+internal static class Program
 {
-    internal static class Program
+    [STAThread]
+    private static void Main()
     {
-        /// <summary>
-        ///  The main entry point for the application.
-        /// </summary>
-        [STAThread]
-        static void Main()
+        using var mutex = new Mutex(true, @"Local\MetroOsd.SingleInstance", out bool createdNew);
+        if (!createdNew)
         {
-            // To customize application configuration such as set high DPI settings or default font,
-            // see https://aka.ms/applicationconfiguration.
-            ApplicationConfiguration.Initialize();
-            Application.Run(new Form1());
+            return;
+        }
+
+#if DEBUG
+        PInvoke.AllocConsole();
+#endif
+
+        ApplicationConfiguration.Initialize();
+
+        var controller = new OsdController();
+        try
+        {
+            controller.Start();
+            Application.ApplicationExit += (_, _) => controller.Dispose();
+            Application.Run(new ApplicationContext());
+        }
+        finally
+        {
+            controller.Dispose();
         }
     }
 }
