@@ -14,7 +14,7 @@ namespace MetroOsd;
 /// </summary>
 internal sealed class OsdController : IDisposable
 {
-    private const int Gap = 6;
+    private const int GapToNativeOsd = 6;
 
     private readonly KeyboardHook _keyboardHook;
     private readonly NativeOsdWatcher _watcher;
@@ -54,7 +54,7 @@ internal sealed class OsdController : IDisposable
             Log.Info($"caps={capsOn}: native OSD not captured, using default pos=({pos.X},{pos.Y})");
         }
 
-        _form.ShowOsd(text, pos);
+        _form.ShowOsd(text, capsOn ? OsdForm.CapsLockOnIcon : OsdForm.CapsLockOffIcon, pos);
     }
 
     private void OnNativeOsdVisible(RECT rect)
@@ -83,7 +83,7 @@ internal sealed class OsdController : IDisposable
         _form.MoveTo(pos);
     }
 
-    private Point Below(RECT rect) => new(rect.left, rect.bottom + Gap);
+    private Point Below(RECT rect) => new(rect.left, rect.bottom + GapToNativeOsd);
 
     private Point At(RECT rect) => new(rect.left, rect.top);
 
