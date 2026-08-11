@@ -13,6 +13,7 @@ UnhookWindowsHookEx
 SetWinEventHook
 UnhookWinEvent
 GetKeyState
+GetUserDefaultUILanguage
 GetModuleHandle
 AllocConsole
 VIRTUAL_KEY

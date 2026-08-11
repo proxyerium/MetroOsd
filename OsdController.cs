@@ -33,13 +33,14 @@ internal sealed class OsdController : IDisposable
         _watcher.NativeOsdHidden += OnNativeOsdHidden;
         _watcher.Start();
         _keyboardHook.KeyPressed += OnKeyPressed;
+        Log.Info($"display language: {Translations.Strings.DisplayCulture.Name}");
         Log.Info("started");
     }
 
     private void OnKeyPressed()
     {
         bool capsOn = (PInvoke.GetKeyState((int)VIRTUAL_KEY.VK_CAPITAL) & 1) != 0;
-        string text = capsOn ? Resources.CapsLockOn : Resources.CapsLockOff;
+        string text = capsOn ? Translations.Strings.CapsLockOn : Translations.Strings.CapsLockOff;
 
         Point pos;
         if (_watcher.TryGetPlacement(out RECT rect, out bool nativeVisible))

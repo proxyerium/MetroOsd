@@ -55,7 +55,7 @@ internal sealed class OsdForm : Form
         {
             AutoSize = false,
             TextAlign = ContentAlignment.MiddleLeft,
-            Font = new Font("Segoe UI", 12f, FontStyle.Regular),
+            Font = new Font(Translations.Strings.FontName, 12f, FontStyle.Regular),
             BackColor = BackColor,
             ForeColor = ForeColor,
         };
