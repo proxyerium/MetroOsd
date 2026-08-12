@@ -60,7 +60,7 @@ internal sealed class NativeOsdWatcher : IDisposable
 
         if (_hook.IsNull)
         {
-            Log.Info($"SetWinEventHook failed, error={Marshal.GetLastWin32Error()}");
+            Log.Error($"SetWinEventHook failed, error={Marshal.GetLastWin32Error()}");
         }
         else
         {

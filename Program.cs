@@ -1,5 +1,3 @@
-using Windows.Win32;
-
 namespace MetroOsd;
 
 internal static class Program
@@ -12,10 +10,6 @@ internal static class Program
         {
             return;
         }
-
-#if DEBUG
-        PInvoke.AllocConsole();
-#endif
 
         ApplicationConfiguration.Initialize();
 
