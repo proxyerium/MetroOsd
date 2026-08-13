@@ -1,0 +1,84 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build and publish release
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Guard - tag commit must be on main
+        id: guard
+        shell: pwsh
+        run: |
+          git fetch origin main --quiet
+          $commit = git rev-list -n 1 "${{ github.sha }}"
+          if ($LASTEXITCODE -ne 0) { $commit = "${{ github.sha }}" }
+          git merge-base --is-ancestor $commit origin/main
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Tag commit is on main; release will proceed."
+            "on_main=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          } else {
+            Write-Host "Tag commit is NOT on main; release will be skipped."
+            "on_main=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          }
+
+      - name: Publish framework-dependent osd.exe
+        shell: pwsh
+        run: |
+          dotnet publish MetroOsd.csproj -c Release -r win-x64 --self-contained false `
+            -p:PublishSingleFile=true `
+            -p:DebugType=none -p:DebugSymbols=false `
+            -p:AssemblyName=osd `
+            -o publish/framework-dependent
+
+      - name: Publish self-contained osd.exe
+        shell: pwsh
+        run: |
+          dotnet publish MetroOsd.csproj -c Release -r win-x64 --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:EnableCompressionInSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:DebugType=none -p:DebugSymbols=false `
+            -p:AssemblyName=osd `
+            -o publish/selfcontained
+
+      - name: Stage files and create archives
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          New-Item -ItemType Directory -Force -Path dist/framework-dependent, dist/selfcontained | Out-Null
+          foreach ($mode in 'framework-dependent', 'selfcontained') {
+            Copy-Item -LiteralPath "publish/$mode/osd.exe" -Destination "dist/$mode/osd.exe"
+            Copy-Item -LiteralPath install.ps1 -Destination "dist/$mode/install.ps1"
+            Copy-Item -LiteralPath uninstall.ps1 -Destination "dist/$mode/uninstall.ps1"
+            Compress-Archive -Path "dist/$mode/*" -DestinationPath "MetroOsd-$tag-$mode.zip" -Force
+          }
+
+      - name: Publish GitHub Release
+        if: steps.guard.outputs.on_main == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: |
+            MetroOsd-${{ github.ref_name }}-framework-dependent.zip
+            MetroOsd-${{ github.ref_name }}-selfcontained.zip
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
