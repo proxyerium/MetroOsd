@@ -364,3 +364,8 @@ FodyWeavers.xsd
 # Release publishing (GitHub Actions workflow output)
 publish/
 dist/
+
+# WiX / MSI packaging artifacts
+*.msi
+*.wixpdb
+.wix/

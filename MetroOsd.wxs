@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <?define Version = "1.0.0" ?>
+  <?define OsdExe = "bin\publish\osd\osd.exe" ?>
+  <Package
+      Name="MetroOsd"
+      Manufacturer="proxyerium"
+      Version="$(var.Version)"
+      UpgradeCode="{60118EDB-3661-45AA-9590-C2D791F08917}"
+      Language="1033"
+      Scope="perMachine"
+      Compressed="yes">
+    <SummaryInformation Description="MetroOsd - modern Caps Lock on-screen display for Windows" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="MetroOsd" />
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="MetroOsd" />
+    </StandardDirectory>
+
+    <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
+      <Component Id="OsdExe">
+        <File Id="OsdExeFile" Source="$(var.OsdExe)" />
+      </Component>
+      <Component Id="InstallPs1">
+        <File Id="InstallPs1File" Source="install.ps1" />
+      </Component>
+      <Component Id="UninstallPs1">
+        <File Id="UninstallPs1File" Source="uninstall.ps1" />
+      </Component>
+      <Component Id="Readme">
+        <File Id="ReadmeFile" Source="README.md" />
+      </Component>
+    </ComponentGroup>
+
+    <ComponentGroup Id="Shortcuts" Directory="ApplicationProgramsFolder">
+      <Component Id="StartMenuShortcut">
+        <Shortcut Id="MetroOsdShortcut" Name="MetroOsd" Description="MetroOsd" Target="[INSTALLFOLDER]osd.exe" WorkingDirectory="INSTALLFOLDER" />
+        <RemoveFolder Id="RemoveApplicationProgramsFolder" Directory="ApplicationProgramsFolder" On="uninstall" />
+        <RegistryValue Root="HKCU" Key="Software\MetroOsd" Name="installed" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <Feature Id="Main" Title="MetroOsd" Level="1">
+      <ComponentGroupRef Id="ProductComponents" />
+      <ComponentGroupRef Id="Shortcuts" />
+    </Feature>
+  </Package>
+</Wix>
+
+
