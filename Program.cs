@@ -13,6 +13,8 @@ internal static class Program
 
         ApplicationConfiguration.Initialize();
 
+        AutoStart.EnsureRegistered();
+
         var controller = new OsdController();
         try
         {
@@ -26,3 +28,4 @@ internal static class Program
         }
     }
 }
+

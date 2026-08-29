@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
-  <?define Version = "1.0.0" ?>
   <?define OsdExe = "bin\publish\osd\osd.exe" ?>
   <Package
       Name="MetroOsd"
@@ -26,12 +25,6 @@
       <Component Id="OsdExe">
         <File Id="OsdExeFile" Source="$(var.OsdExe)" />
       </Component>
-      <Component Id="InstallPs1">
-        <File Id="InstallPs1File" Source="install.ps1" />
-      </Component>
-      <Component Id="UninstallPs1">
-        <File Id="UninstallPs1File" Source="uninstall.ps1" />
-      </Component>
       <Component Id="Readme">
         <File Id="ReadmeFile" Source="README.md" />
       </Component>
@@ -45,11 +38,21 @@
       </Component>
     </ComponentGroup>
 
+    <!-- Removes the auto-start Run value (and the first-launch marker) on uninstall.
+         The Run value is normally written by the app itself on first launch. -->
+    <ComponentGroup Id="UninstallCleanup" Directory="INSTALLFOLDER">
+      <Component Id="RemoveAutostart">
+        <RemoveRegistryValue Root="HKCU" Key="Software\Microsoft\Windows\CurrentVersion\Run" Name="MetroOsd" />
+        <RemoveRegistryValue Root="HKCU" Key="Software\MetroOsd" Name="AutoStartConfigured" />
+        <RegistryValue Root="HKCU" Key="Software\MetroOsd" Name="autostart-cleanup" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
     <Feature Id="Main" Title="MetroOsd" Level="1">
       <ComponentGroupRef Id="ProductComponents" />
       <ComponentGroupRef Id="Shortcuts" />
+      <ComponentGroupRef Id="UninstallCleanup" />
     </Feature>
   </Package>
 </Wix>
-
 
