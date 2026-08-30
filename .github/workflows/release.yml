@@ -66,8 +66,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path dist/framework-dependent, dist/selfcontained | Out-Null
           foreach ($mode in 'framework-dependent', 'selfcontained') {
             Copy-Item -LiteralPath "publish/$mode/osd.exe" -Destination "dist/$mode/osd.exe"
-            Copy-Item -LiteralPath install.ps1 -Destination "dist/$mode/install.ps1"
-            Copy-Item -LiteralPath uninstall.ps1 -Destination "dist/$mode/uninstall.ps1"
+            Copy-Item -LiteralPath README.md -Destination "dist/$mode/README.md"
             Compress-Archive -Path "dist/$mode/*" -DestinationPath "MetroOsd-$tag-$mode.zip" -Force
           }
 

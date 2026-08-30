@@ -9,19 +9,24 @@
     3. Builds the MSI with `wix build`.
     4. Signs the MSI with the same certificate.
 
+    The MSI version stays in sync with the git tag: when -Version is omitted it is
+    derived from the most recent tag (e.g. v0.2 -> 0.2.0). The major version is kept
+    at 0 (0.x.y). Pass -Version to override.
+
     For local testing a self-signed certificate can be used, but the certificate
     must be imported into the machine's Trusted Root and Trusted Publishers stores
     for Windows to honor uiAccess. Production releases should use a CA-issued
     code-signing certificate.
 
 .EXAMPLE
-    .\build-msi.ps1 -CertThumbprint 0A5CEAB0FE7E1DB8CA58512E314CE6B071DF2565 -Version 1.0.0
+    .\build-msi.ps1 -CertThumbprint 0A5CEAB0FE7E1DB8CA58512E314CE6B071DF2565
+    .\build-msi.ps1 -CertThumbprint 0A5CEAB0FE7E1DB8CA58512E314CE6B071DF2565 -Version 0.2.0
 #>
 param(
     [Parameter(Mandatory = $true, HelpMessage = 'SHA1 thumbprint of the code-signing certificate')]
     [string]$CertThumbprint,
 
-    [string]$Version = '1.0.0',
+    [string]$Version,
 
     [switch]$SkipTimestamp
 )
@@ -31,8 +36,6 @@ $ErrorActionPreference = 'Stop'
 $root       = $PSScriptRoot
 $outDir     = Join-Path $root 'bin\publish\osd'
 $wxs        = Join-Path $root 'MetroOsd.wxs'
-$msiOut     = Join-Path $root "bin\publish\MetroOsd-$Version.msi"
-$publishDir = Split-Path $msiOut -Parent
 $signtool   = 'C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe'
 $timestamp  = 'http://timestamp.digicert.com'
 
@@ -40,6 +43,39 @@ if (-not (Test-Path -LiteralPath $signtool)) {
     throw "signtool.exe not found at: $signtool`nInstall the Windows SDK or update the path in this script."
 }
 
+# --- Resolve the MSI version -------------------------------------------------
+if ([string]::IsNullOrEmpty($Version)) {
+    Push-Location $root
+    try {
+        $tag = & git describe --tags --abbrev=0 2>$null
+        if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($tag)) {
+            $Version = $tag -replace '^[vV]', ''
+            Write-Host "Version derived from git tag: $tag -> $Version" -ForegroundColor Cyan
+        }
+    }
+    finally {
+        Pop-Location
+    }
+}
+
+if ([string]::IsNullOrEmpty($Version)) {
+    throw 'Cannot determine version: no git tag found. Pass -Version explicitly.'
+}
+
+# Normalize to x.y.z (Windows Installer requires 3 components): v0.2 -> 0.2.0
+$parts = $Version.Split('.')
+if ($parts.Count -lt 3) {
+    $Version = (($parts + @('0', '0', '0'))[0..2]) -join '.'
+}
+if ($Version -notmatch '^\d+\.\d+\.\d+$') {
+    throw "Invalid MSI version: '$Version'. Expected x.y.z (e.g. 0.2.0)."
+}
+Write-Host "MSI version: $Version"
+
+$msiOut     = Join-Path $root "bin\publish\MetroOsd-$Version.msi"
+$publishDir = Split-Path $msiOut -Parent
+
+# --- Build -------------------------------------------------------------------
 Push-Location $root
 try {
     New-Item -ItemType Directory -Force -Path $outDir, $publishDir | Out-Null
@@ -84,10 +120,3 @@ try {
 finally {
     Pop-Location
 }
-
-
-
-
-
-
-

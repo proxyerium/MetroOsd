@@ -38,7 +38,7 @@ dotnet publish MetroOsd.csproj -c Release -r win-x64 --self-contained true `
 Prerequisites: [WiX Toolset](https://wixtoolset.org/) (`dotnet tool install --global wix`), the Windows SDK (`signtool`), and a code-signing certificate.
 
 ```powershell
-.\build-msi.ps1 -CertThumbprint <SHA1-thumbprint> -Version 1.0.0
+.\build-msi.ps1 -CertThumbprint <SHA1-thumbprint>
 ```
 
 The script publishes a self-contained single-file `osd.exe` to `bin\publish\osd\`, signs it (required for `uiAccess`), builds the MSI with `wix build`, and signs the MSI too. The final installer is written to `bin\publish\MetroOsd-<version>.msi`. The MSI installs per-machine to `%ProgramFiles%\MetroOsd` and supports major upgrades via a fixed `UpgradeCode`.
