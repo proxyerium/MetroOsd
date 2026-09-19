@@ -40,6 +40,16 @@ internal sealed class OsdController : IDisposable
     private void OnKeyPressed()
     {
         bool capsOn = (PInvoke.GetKeyState((int)VIRTUAL_KEY.VK_CAPITAL) & 1) != 0;
+
+        // A topmost overlay can kick an exclusive-fullscreen (D3D) app out of fullscreen,
+        // so suppress the OSD while such an app owns the screen. CapsLock itself is not
+        // affected: the keyboard hook always passes the key through.
+        if (ExclusiveFullscreenDetector.IsActive())
+        {
+            Log.Info($"caps={capsOn}: exclusive fullscreen app active, OSD suppressed");
+            return;
+        }
+
         string text = capsOn ? Translations.Strings.CapsLockOn : Translations.Strings.CapsLockOff;
 
         Point pos;
