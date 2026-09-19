@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
-  <?define OsdExe = "bin\publish\osd\osd.exe" ?>
+  <?define OsdExe = "bin\publish\osd\metro-osd.exe" ?>
   <Package
       Name="MetroOsd"
       Manufacturer="proxyerium"
@@ -32,7 +32,7 @@
 
     <ComponentGroup Id="Shortcuts" Directory="ApplicationProgramsFolder">
       <Component Id="StartMenuShortcut">
-        <Shortcut Id="MetroOsdShortcut" Name="MetroOsd" Description="MetroOsd" Target="[INSTALLFOLDER]osd.exe" WorkingDirectory="INSTALLFOLDER" />
+        <Shortcut Id="MetroOsdShortcut" Name="MetroOsd" Description="MetroOsd" Target="[INSTALLFOLDER]metro-osd.exe" WorkingDirectory="INSTALLFOLDER" />
         <RemoveFolder Id="RemoveApplicationProgramsFolder" Directory="ApplicationProgramsFolder" On="uninstall" />
         <RegistryValue Root="HKCU" Key="Software\MetroOsd" Name="installed" Type="integer" Value="1" KeyPath="yes" />
       </Component>

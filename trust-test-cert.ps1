@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Trusts the MetroOsd self-signed code-signing certificate so the signed osd.exe
+    Trusts the MetroOsd self-signed code-signing certificate so the signed metro-osd.exe
     can start with uiAccess="true".
 
 .DESCRIPTION
@@ -47,7 +47,7 @@ try {
         Import-Certificate -FilePath $tmp -CertStoreLocation Cert:\LocalMachine\Root | Out-Null
         Import-Certificate -FilePath $tmp -CertStoreLocation Cert:\LocalMachine\TrustedPublisher | Out-Null
         Write-Host "Imported $($cert.Subject) into LocalMachine Trusted Root and Trusted Publishers." -ForegroundColor Green
-        Write-Host "osd.exe should now start. Remember: this is a machine-wide trust change." -ForegroundColor Yellow
+        Write-Host "metro-osd.exe should now start. Remember: this is a machine-wide trust change." -ForegroundColor Yellow
     }
 }
 finally {

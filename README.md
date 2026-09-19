@@ -15,9 +15,9 @@ It hooks specific keyboard events globally and shows an indicator, positioned re
 
 Download from the [Releases](https://github.com/proxyerium/MetroOsd/releases):
 
-- `MetroOsd-<version>.msi` — installs `osd.exe` to `%ProgramFiles%\MetroOsd` and adds a Start Menu shortcut.
+- `MetroOsd-<version>.msi` — installs `metro-osd.exe` to `%ProgramFiles%\MetroOsd` and adds a Start Menu shortcut.
 - `MetroOsd-<version>-selfcontained.zip` — no runtime needed.
-- `MetroOsd-<version>.zip` — smaller `osd.exe`, requires the .NET 8 Desktop Runtime.
+- `MetroOsd-<version>.zip` — smaller `metro-osd.exe`, requires the .NET 8 Desktop Runtime.
 
 ## Building from source
 
@@ -30,7 +30,7 @@ dotnet publish MetroOsd.csproj -c Release -r win-x64 --self-contained true `
   -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true `
   -p:IncludeNativeLibrariesForSelfExtract=true `
   -p:DebugType=none -p:DebugSymbols=false `
-  -p:AssemblyName=osd -o bin\publish\selfcontained
+  -o bin\publish\selfcontained
 ```
 
 ### Build the MSI installer
@@ -41,7 +41,7 @@ Prerequisites: [WiX Toolset](https://wixtoolset.org/) (`dotnet tool install --gl
 .\build-msi.ps1 -CertThumbprint <SHA1-thumbprint>
 ```
 
-The script publishes a self-contained single-file `osd.exe` to `bin\publish\osd\`, signs it (required for `uiAccess`), builds the MSI with `wix build`, and signs the MSI too. The final installer is written to `bin\publish\MetroOsd-<version>.msi`. The MSI installs per-machine to `%ProgramFiles%\MetroOsd` and supports major upgrades via a fixed `UpgradeCode`.
+The script publishes a self-contained single-file `metro-osd.exe` to `bin\publish\osd\`, signs it (required for `uiAccess`), builds the MSI with `wix build`, and signs the MSI too. The final installer is written to `bin\publish\MetroOsd-<version>.msi`. The MSI installs per-machine to `%ProgramFiles%\MetroOsd` and supports major upgrades via a fixed `UpgradeCode`.
 
 ## Code signing and uiAccess
 
