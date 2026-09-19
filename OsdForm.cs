@@ -125,10 +125,19 @@ internal sealed class OsdForm : Form
         Opacity = Math.Max(0f, Opacity - step);
         if (Opacity <= 0f)
         {
-            _fadeTimer.Stop();
-            Opacity = 1f; // reset for the next show
-            Hide();       // make the window invisible
+            Dismiss();
         }
+    }
+
+    /// <summary>
+    /// Hides the overlay immediately, cancelling any pending hide delay and in-flight fade.
+    /// </summary>
+    public void Dismiss()
+    {
+        _timer.Stop();
+        _fadeTimer.Stop();
+        Opacity = 1f; // reset for the next show
+        Hide();       // make the window invisible
     }
 
     /// <summary>Repositions an already-visible overlay (keeps size and hide timer).</summary>

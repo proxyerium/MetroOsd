@@ -18,12 +18,14 @@ internal sealed class OsdController : IDisposable
 
     private readonly KeyboardHook _keyboardHook;
     private readonly NativeOsdWatcher _watcher;
+    private readonly ForegroundWatcher _foregroundWatcher;
     private readonly OsdForm _form;
 
     public OsdController()
     {
         _keyboardHook = new KeyboardHook();
         _watcher = new NativeOsdWatcher();
+        _foregroundWatcher = new ForegroundWatcher();
         _form = new OsdForm();
     }
 
@@ -32,6 +34,8 @@ internal sealed class OsdController : IDisposable
         _watcher.NativeOsdVisible += OnNativeOsdVisible;
         _watcher.NativeOsdHidden += OnNativeOsdHidden;
         _watcher.Start();
+        _foregroundWatcher.ForegroundChanged += OnForegroundChanged;
+        _foregroundWatcher.Start();
         _keyboardHook.KeyPressed += OnKeyPressed;
         Log.Info($"display language: {Translations.Strings.DisplayCulture.Name}");
         Log.Info("started");
@@ -40,6 +44,16 @@ internal sealed class OsdController : IDisposable
     private void OnKeyPressed()
     {
         bool capsOn = (PInvoke.GetKeyState((int)VIRTUAL_KEY.VK_CAPITAL) & 1) != 0;
+
+        // A topmost overlay can kick an exclusive-fullscreen (D3D) app out of fullscreen,
+        // so suppress the OSD while such an app owns the screen. CapsLock itself is not
+        // affected: the keyboard hook always passes the key through.
+        if (ExclusiveFullscreenDetector.IsActive())
+        {
+            Log.Info($"caps={capsOn}: exclusive fullscreen app active, OSD suppressed");
+            return;
+        }
+
         string text = capsOn ? Translations.Strings.CapsLockOn : Translations.Strings.CapsLockOff;
 
         Point pos;
@@ -56,6 +70,23 @@ internal sealed class OsdController : IDisposable
         }
 
         _form.ShowOsd(text, capsOn ? OsdForm.CapsLockOnIcon : OsdForm.CapsLockOffIcon, pos);
+    }
+
+    private void OnForegroundChanged()
+    {
+        // Switching to an exclusive-fullscreen app while the topmost overlay is still up (delay
+        // or fade still running) can kick that app back to the desktop, so drop the overlay as
+        // soon as such an app takes focus instead of waiting for the hide timer.
+        if (!_form.Visible)
+        {
+            return;
+        }
+
+        if (ExclusiveFullscreenDetector.IsActive())
+        {
+            Log.Info("exclusive fullscreen app focused -> dismissing overlay");
+            _form.Dismiss();
+        }
     }
 
     private void OnNativeOsdVisible(RECT rect)
@@ -94,8 +125,10 @@ internal sealed class OsdController : IDisposable
     {
         _watcher.NativeOsdVisible -= OnNativeOsdVisible;
         _watcher.NativeOsdHidden -= OnNativeOsdHidden;
+        _foregroundWatcher.ForegroundChanged -= OnForegroundChanged;
         _keyboardHook.Dispose();
         _watcher.Dispose();
+        _foregroundWatcher.Dispose();
         _form.Dispose();
     }
 }
