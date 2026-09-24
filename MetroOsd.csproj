@@ -9,7 +9,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RootNamespace>MetroOsd</RootNamespace>
     <AssemblyName>metro-osd</AssemblyName>
-    <Version>0.2.0</Version>
+    <Version>0.4.1</Version>
     <!-- Release only: app.manifest requests uiAccess, which Windows rejects for unsigned
          exes outside a protected directory. Debug uses the uiAccess-free twin. -->
     <ApplicationManifest Condition="'$(Configuration)' == 'Release'">app.manifest</ApplicationManifest>
