@@ -2,17 +2,116 @@ name: release
 
 on:
   push:
-    # Release versions are plain x.y.z (no "v" prefix), matching the MSI version and the
-    # archive name. The glob is only a coarse filter; the job re-checks it exactly.
+    branches:
+      - main
     tags:
       - '[0-9]*.[0-9]*.[0-9]*'
+  workflow_dispatch:
 
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
+  prepare:
+    name: Resolve version and tag
+    runs-on: windows-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      release: ${{ steps.resolve.outputs.release }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version
+        id: resolve
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          # A tag push already carries the version; use it directly.
+          if ("${{ github.ref_type }}" -eq 'tag') {
+            $version = "${{ github.ref_name }}"
+            if ($version -notmatch '^\d+\.\d+\.\d+$') {
+              Write-Error "Tag '$version' is not a plain x.y.z version (e.g. 0.3.0, no 'v' prefix)."
+            }
+
+            # Only release tags whose commit is reachable from main.
+            git fetch origin main --quiet
+            $commit = git rev-list -n 1 "${{ github.sha }}"
+            if ($LASTEXITCODE -ne 0) { $commit = "${{ github.sha }}" }
+            git merge-base --is-ancestor $commit origin/main
+            $onMain = ($LASTEXITCODE -eq 0)
+            $LASTEXITCODE = 0
+            if (-not $onMain) {
+              Write-Host "Tag '$version' is NOT on main; release will be skipped."
+              "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+              "release=false"    | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+              exit 0
+            }
+
+            Write-Host "Triggered by tag '$version'; release will proceed."
+            "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+            "release=true"     | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+            exit 0
+          }
+
+          # Auto-tagging is for main only (workflow_dispatch can target other refs).
+          if ("${{ github.ref_name }}" -ne 'main') {
+            Write-Error "Releases are only created from the main branch (got '${{ github.ref_name }}')."
+          }
+
+          git fetch --tags --force --quiet
+
+          # MetroOsd.csproj <Version> is the single source of truth.
+          [xml]$proj = Get-Content -LiteralPath MetroOsd.csproj
+          $version = $proj.Project.PropertyGroup.Version |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            Select-Object -First 1
+          if ([string]::IsNullOrWhiteSpace($version)) {
+            Write-Error 'MetroOsd.csproj has no <Version> element.'
+          }
+          if ($version -notmatch '^\d+\.\d+\.\d+$') {
+            Write-Error "csproj <Version> '$version' is not a plain x.y.z version."
+          }
+
+          # Highest existing plain x.y.z tag (ignores other tags like 'v0.3').
+          $latest = git tag --list '[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname |
+            Select-Object -First 1
+
+          if (-not [string]::IsNullOrWhiteSpace($latest)) {
+            if ([version]$version -lt [version]$latest) {
+              Write-Error "csproj <Version> '$version' is older than the latest tag '$latest'. Bump <Version> in MetroOsd.csproj."
+            }
+            if ([version]$version -eq [version]$latest -or (git tag --list $version)) {
+              Write-Host "Version '$version' is already released; nothing to do."
+              "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+              "release=false"    | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+              $LASTEXITCODE = 0
+              exit 0
+            }
+          }
+
+          # Newer than everything released: create the tag. Pushing with GITHUB_TOKEN
+          # does not re-trigger this workflow, so there is no duplicate run.
+          git tag $version
+          if ($LASTEXITCODE -ne 0) { Write-Error "Failed to create tag '$version'." }
+          git push origin "refs/tags/$version"
+          if ($LASTEXITCODE -ne 0) { Write-Error "Failed to push tag '$version'." }
+
+          Write-Host "Created and pushed tag '$version'."
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "release=true"     | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
   build:
     name: Build and publish release
+    needs: prepare
+    if: needs.prepare.outputs.release == 'true'
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -25,32 +124,6 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      - name: Guard - tag must be plain x.y.z
-        shell: pwsh
-        run: |
-          $tag = "${{ github.ref_name }}"
-          if ($tag -notmatch '^\d+\.\d+\.\d+$') {
-            Write-Error "Tag '$tag' is not a plain x.y.z version (e.g. 0.3.0, no 'v' prefix)."
-            exit 1
-          }
-          Write-Host "Tag '$tag' is a valid x.y.z version."
-
-      - name: Guard - tag commit must be on main
-        id: guard
-        shell: pwsh
-        run: |
-          git fetch origin main --quiet
-          $commit = git rev-list -n 1 "${{ github.sha }}"
-          if ($LASTEXITCODE -ne 0) { $commit = "${{ github.sha }}" }
-          git merge-base --is-ancestor $commit origin/main
-          if ($LASTEXITCODE -eq 0) {
-            Write-Host "Tag commit is on main; release will proceed."
-            "on_main=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-          } else {
-            Write-Host "Tag commit is NOT on main; release will be skipped."
-            "on_main=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-          }
-
       - name: Publish metro-osd
         shell: pwsh
         run: |
@@ -61,19 +134,18 @@ jobs:
       - name: Stage files and create archive
         shell: pwsh
         run: |
-          $tag = "${{ github.ref_name }}"
+          $tag = "${{ needs.prepare.outputs.version }}"
           New-Item -ItemType Directory -Force -Path dist/MetroOsd | Out-Null
           Copy-Item -Path publish/osd/* -Destination dist/MetroOsd -Recurse
           Copy-Item -LiteralPath README.md -Destination dist/MetroOsd/README.md
           Compress-Archive -Path dist/MetroOsd/* -DestinationPath "MetroOsd-$tag.zip" -Force
 
       - name: Publish GitHub Release
-        if: steps.guard.outputs.on_main == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
+          tag_name: ${{ needs.prepare.outputs.version }}
           files: |
-            MetroOsd-${{ github.ref_name }}.zip
+            MetroOsd-${{ needs.prepare.outputs.version }}.zip
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
