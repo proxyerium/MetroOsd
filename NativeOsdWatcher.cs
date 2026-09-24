@@ -155,7 +155,8 @@ internal sealed class NativeOsdWatcher : IDisposable
     {
         Span<char> buf = stackalloc char[256];
         int len = PInvoke.GetClassName(hwnd, buf);
-        if (len <= 0 || new string(buf[..len]) != OsdClassName)
+        // Slice instead of buf[..len]: System.Index/Range do not exist on .NET Framework.
+        if (len <= 0 || buf.Slice(0, len).ToString() != OsdClassName)
         {
             return false;
         }
@@ -196,7 +197,7 @@ internal sealed class NativeOsdWatcher : IDisposable
         // Cheap pre-filter by class before doing anything else.
         Span<char> buf = stackalloc char[64];
         int len = PInvoke.GetClassName(hwnd, buf);
-        if (len <= 0 || new string(buf[..len]) != OsdClassName)
+        if (len <= 0 || buf.Slice(0, len).ToString() != OsdClassName)
         {
             return;
         }
@@ -251,7 +252,8 @@ internal sealed class NativeOsdWatcher : IDisposable
         Log.Info($"native OSD captured ({via}): hwnd={HwndHex(hwnd)}, owner={OwnerName(hwnd)}, hasChild={HasDirectUIHWNDChild(hwnd)}, rect={_rect}");
     }
 
-    private static unsafe string HwndHex(HWND hwnd) => $"0x{(nint)hwnd.Value:X}";
+    // IntPtr is not IFormattable on .NET Framework, so the "X" format is applied to the long.
+    private static unsafe string HwndHex(HWND hwnd) => "0x" + ((IntPtr)hwnd.Value).ToInt64().ToString("X");
 
     private static string OwnerName(HWND hwnd)
     {

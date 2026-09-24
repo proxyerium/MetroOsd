@@ -2,8 +2,10 @@ name: release
 
 on:
   push:
+    # Release versions are plain x.y.z (no "v" prefix), matching the MSI version and the
+    # archive name. The glob is only a coarse filter; the job re-checks it exactly.
     tags:
-      - 'v*'
+      - '[0-9]*.[0-9]*.[0-9]*'
 
 permissions:
   contents: write
@@ -23,6 +25,16 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
+      - name: Guard - tag must be plain x.y.z
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          if ($tag -notmatch '^\d+\.\d+\.\d+$') {
+            Write-Error "Tag '$tag' is not a plain x.y.z version (e.g. 0.3.0, no 'v' prefix)."
+            exit 1
+          }
+          Write-Host "Tag '$tag' is a valid x.y.z version."
+
       - name: Guard - tag commit must be on main
         id: guard
         shell: pwsh
@@ -39,34 +51,21 @@ jobs:
             "on_main=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           }
 
-      - name: Publish framework-dependent metro-osd.exe
+      - name: Publish metro-osd
         shell: pwsh
         run: |
-          dotnet publish MetroOsd.csproj -c Release -r win-x64 --self-contained false `
-            -p:PublishSingleFile=true `
+          dotnet publish MetroOsd.csproj -c Release -f net48 `
             -p:DebugType=none -p:DebugSymbols=false `
-            -o publish/framework-dependent
+            -o publish/osd
 
-      - name: Publish self-contained metro-osd.exe
-        shell: pwsh
-        run: |
-          dotnet publish MetroOsd.csproj -c Release -r win-x64 --self-contained true `
-            -p:PublishSingleFile=true `
-            -p:EnableCompressionInSingleFile=true `
-            -p:IncludeNativeLibrariesForSelfExtract=true `
-            -p:DebugType=none -p:DebugSymbols=false `
-            -o publish/selfcontained
-
-      - name: Stage files and create archives
+      - name: Stage files and create archive
         shell: pwsh
         run: |
           $tag = "${{ github.ref_name }}"
-          New-Item -ItemType Directory -Force -Path dist/framework-dependent, dist/selfcontained | Out-Null
-          foreach ($mode in 'framework-dependent', 'selfcontained') {
-            Copy-Item -LiteralPath "publish/$mode/metro-osd.exe" -Destination "dist/$mode/metro-osd.exe"
-            Copy-Item -LiteralPath README.md -Destination "dist/$mode/README.md"
-            Compress-Archive -Path "dist/$mode/*" -DestinationPath "MetroOsd-$tag-$mode.zip" -Force
-          }
+          New-Item -ItemType Directory -Force -Path dist/MetroOsd | Out-Null
+          Copy-Item -Path publish/osd/* -Destination dist/MetroOsd -Recurse
+          Copy-Item -LiteralPath README.md -Destination dist/MetroOsd/README.md
+          Compress-Archive -Path dist/MetroOsd/* -DestinationPath "MetroOsd-$tag.zip" -Force
 
       - name: Publish GitHub Release
         if: steps.guard.outputs.on_main == 'true'
@@ -74,8 +73,7 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           files: |
-            MetroOsd-${{ github.ref_name }}-framework-dependent.zip
-            MetroOsd-${{ github.ref_name }}-selfcontained.zip
+            MetroOsd-${{ github.ref_name }}.zip
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

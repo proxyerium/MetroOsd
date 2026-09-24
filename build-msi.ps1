@@ -3,15 +3,6 @@
     Builds the MetroOsd MSI installer end-to-end: publish, sign, wix build, sign.
 
 .DESCRIPTION
-    1. Publishes a self-contained single-file metro-osd.exe (win-x64).
-    2. Signs metro-osd.exe with the given code-signing certificate (required because the
-       app manifest requests uiAccess="true").
-    3. Builds the MSI with `wix build`.
-    4. Signs the MSI with the same certificate.
-
-    The MSI version stays in sync with the git tag: when -Version is omitted it is
-    derived from the most recent tag (e.g. v0.2 -> 0.2.0). The major version is kept
-    at 0 (0.x.y). Pass -Version to override.
 
     For local testing a self-signed certificate can be used, but the certificate
     must be imported into the machine's Trusted Root and Trusted Publishers stores
@@ -49,8 +40,8 @@ if ([string]::IsNullOrEmpty($Version)) {
     try {
         $tag = & git describe --tags --abbrev=0 2>$null
         if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($tag)) {
-            $Version = $tag -replace '^[vV]', ''
-            Write-Host "Version derived from git tag: $tag -> $Version" -ForegroundColor Cyan
+            $Version = $tag
+            Write-Host "Version derived from git tag: $tag" -ForegroundColor Cyan
         }
     }
     finally {
@@ -62,11 +53,6 @@ if ([string]::IsNullOrEmpty($Version)) {
     throw 'Cannot determine version: no git tag found. Pass -Version explicitly.'
 }
 
-# Normalize to x.y.z (Windows Installer requires 3 components): v0.2 -> 0.2.0
-$parts = $Version.Split('.')
-if ($parts.Count -lt 3) {
-    $Version = (($parts + @('0', '0', '0'))[0..2]) -join '.'
-}
 if ($Version -notmatch '^\d+\.\d+\.\d+$') {
     throw "Invalid MSI version: '$Version'. Expected x.y.z (e.g. 0.2.0)."
 }
@@ -80,11 +66,11 @@ Push-Location $root
 try {
     New-Item -ItemType Directory -Force -Path $outDir, $publishDir | Out-Null
 
-    # 1) Publish self-contained single-file metro-osd.exe
+    # MetroOsd.wxs collects the publish folder recursively, so a file left over from an
+    # earlier publish would silently end up in the installer.
+    if (Test-Path -LiteralPath $outDir) { Remove-Item -LiteralPath $outDir -Recurse -Force }
     Write-Host '[1/4] Publishing metro-osd.exe ...' -ForegroundColor Cyan
-    dotnet publish MetroOsd.csproj -c Release -r win-x64 --self-contained true `
-        -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true `
-        -p:IncludeNativeLibrariesForSelfExtract=true `
+    dotnet publish MetroOsd.csproj -c Release -f net48 `
         -p:DebugType=none -p:DebugSymbols=false `
         -o $outDir
     if ($LASTEXITCODE -ne 0) { throw 'dotnet publish failed.' }
@@ -101,12 +87,11 @@ try {
 
     # 3) Build the MSI
     Write-Host '[3/4] Building MSI ...' -ForegroundColor Cyan
-    $osdExeRel = $outDir
-    if ($osdExeRel.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)) {
-        $osdExeRel = $osdExeRel.Substring($root.Length).TrimStart('\')
+    $osdDirRel = $outDir
+    if ($osdDirRel.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)) {
+        $osdDirRel = $osdDirRel.Substring($root.Length).TrimStart('\')
     }
-    $osdExeRel = Join-Path $osdExeRel 'metro-osd.exe'
-    wix --acceptEula wix7 build $wxs -d Version=$Version -d OsdExe="$osdExeRel" -o $msiOut
+    wix --acceptEula wix7 build $wxs -d Version=$Version -d OsdPublishDir="$osdDirRel" -o $msiOut
     if ($LASTEXITCODE -ne 0) { throw 'wix build failed.' }
 
     # 4) Sign the MSI

@@ -145,8 +145,8 @@ internal sealed class OsdForm : Form
     {
         // Keep the overlay inside the working area in case the native OSD sits near an edge.
         Rectangle wa = Screen.FromPoint(location).WorkingArea;
-        int x = Math.Clamp(location.X, wa.Left, Math.Max(wa.Left, wa.Right - Width));
-        int y = Math.Clamp(location.Y, wa.Top, Math.Max(wa.Top, wa.Bottom - Height));
+        int x = Math.Min(Math.Max(location.X, wa.Left), Math.Max(wa.Left, wa.Right - Width));
+        int y = Math.Min(Math.Max(location.Y, wa.Top), Math.Max(wa.Top, wa.Bottom - Height));
         Location = new Point(x, y);
     }
 }

@@ -8,16 +8,15 @@ It hooks specific keyboard events globally and shows an indicator, positioned re
 
 ## Requirements
 
-- Windows 10
-- [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) — if you prefer non-SelfContained builds
+- Windows 10 1903+
+
 
 ## Usage
 
 Download from the [Releases](https://github.com/proxyerium/MetroOsd/releases):
 
 - `MetroOsd-<version>.msi` — installs `metro-osd.exe` to `%ProgramFiles%\MetroOsd` and adds a Start Menu shortcut.
-- `MetroOsd-<version>-selfcontained.zip` — no runtime needed.
-- `MetroOsd-<version>.zip` — smaller `metro-osd.exe`, requires the .NET 8 Desktop Runtime.
+- `MetroOsd-<version>.zip` — run `metro-osd.exe` directly.
 
 ## Building from source
 
@@ -25,12 +24,10 @@ Download from the [Releases](https://github.com/proxyerium/MetroOsd/releases):
 # Debug
 dotnet build
 
-# SelfContained release
-dotnet publish MetroOsd.csproj -c Release -r win-x64 --self-contained true `
-  -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true `
-  -p:IncludeNativeLibrariesForSelfExtract=true `
+# Release
+dotnet publish MetroOsd.csproj -c Release -f net48 `
   -p:DebugType=none -p:DebugSymbols=false `
-  -o bin\publish\selfcontained
+  -o bin\publish\osd
 ```
 
 ### Build the MSI installer
@@ -41,11 +38,11 @@ Prerequisites: [WiX Toolset](https://wixtoolset.org/) (`dotnet tool install --gl
 .\build-msi.ps1 -CertThumbprint <SHA1-thumbprint>
 ```
 
-The script publishes a self-contained single-file `metro-osd.exe` to `bin\publish\osd\`, signs it (required for `uiAccess`), builds the MSI with `wix build`, and signs the MSI too. The final installer is written to `bin\publish\MetroOsd-<version>.msi`. The MSI installs per-machine to `%ProgramFiles%\MetroOsd` and supports major upgrades via a fixed `UpgradeCode`.
+The script publishes a `metro-osd.exe` for .NET Framework 4.8 to `bin\publish\osd\`, signs it (required for `uiAccess`), builds the MSI with `wix build`, and signs the MSI too. The final installer is written to `bin\publish\MetroOsd-<version>.msi`. The MSI installs per-machine to `%ProgramFiles%\MetroOsd` and supports major upgrades via a fixed `UpgradeCode`.
 
 ## Code signing and uiAccess
 
-MetroOsd's application manifest (`app.manifest`) requests `uiAccess="true"`, which lets the overlay draw on top of elevated windows. Windows only allows `uiAccess` when the executable is Authenticode-signed with a certificate the machine trusts **and** is located in a protected directory such as `%ProgramFiles%` (the MSI installs there).
+MetroOsd's Release application manifest (`app.manifest`) requests `uiAccess="true"`, which lets the overlay draw on top of elevated windows. Windows only allows `uiAccess` when the executable is Authenticode-signed with a certificate the machine trusts **and** is located in a protected directory such as `%ProgramFiles%` (the MSI installs there). An unsigned Release build therefore cannot be launched outside `%ProgramFiles%`; local runs use the Debug build, which embeds `app.debug.manifest` with `uiAccess="false"` instead.
 
 
 ## Credits

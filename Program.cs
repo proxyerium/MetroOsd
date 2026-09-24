@@ -11,7 +11,8 @@ internal static class Program
             return;
         }
 
-        ApplicationConfiguration.Initialize();
+        Application.EnableVisualStyles();
+        Application.SetCompatibleTextRenderingDefault(false);
 
         AutoStart.EnsureRegistered();
 

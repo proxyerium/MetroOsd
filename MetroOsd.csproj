@@ -2,23 +2,35 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
-    <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RootNamespace>MetroOsd</RootNamespace>
     <AssemblyName>metro-osd</AssemblyName>
     <Version>0.2.0</Version>
+    <!-- Release only: app.manifest requests uiAccess, which Windows rejects for unsigned
+         exes outside a protected directory. Debug uses the uiAccess-free twin. -->
     <ApplicationManifest Condition="'$(Configuration)' == 'Release'">app.manifest</ApplicationManifest>
+    <ApplicationManifest Condition="'$(Configuration)' != 'Release'">app.debug.manifest</ApplicationManifest>
   </PropertyGroup>
 
   <ItemGroup>
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="System.Drawing" />
+    <Using Include="System.Windows.Forms" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.Windows.CsWin32" Version="0.3.298" PrivateAssets="all" />
+    <!-- Required by CsWin32 when targeting .NET Framework 4.5+: adds Span-based overloads. -->
+    <PackageReference Include="System.Memory" Version="4.5.5" />
+    <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="6.0.0" />
   </ItemGroup>
 
 </Project>
-
-
-
-

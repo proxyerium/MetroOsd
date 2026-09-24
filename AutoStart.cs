@@ -1,3 +1,4 @@
+using System.Reflection;
 using Microsoft.Win32;
 
 namespace MetroOsd;
@@ -25,8 +26,8 @@ internal static class AutoStart
     {
         try
         {
-            string? exePath = Environment.ProcessPath;
-            if (string.IsNullOrEmpty(exePath) || !IsInstalled(exePath))
+            string exePath = Assembly.GetEntryAssembly()?.Location ?? string.Empty;
+            if (exePath.Length == 0 || !IsInstalled(exePath))
             {
                 Log.Info("autostart skipped (not running from Program Files)");
                 return;

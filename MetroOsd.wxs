@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
-  <?define OsdExe = "bin\publish\osd\metro-osd.exe" ?>
+  <?define OsdPublishDir = "bin\publish\osd" ?>
   <Package
       Name="MetroOsd"
       Manufacturer="proxyerium"
@@ -22,9 +22,7 @@
     </StandardDirectory>
 
     <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
-      <Component Id="OsdExe">
-        <File Id="OsdExeFile" Source="$(var.OsdExe)" />
-      </Component>
+      <Files Include="$(var.OsdPublishDir)\**" />
       <Component Id="Readme">
         <File Id="ReadmeFile" Source="README.md" />
       </Component>

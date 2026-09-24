@@ -4,10 +4,15 @@
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
     <security>
       <requestedPrivileges>
-        <requestedExecutionLevel level="asInvoker" uiAccess="true" />
+        <!-- Debug/local builds are unsigned and outside Program Files, so uiAccess must stay
+             false: Windows refuses to start an exe that requests uiAccess unless it is
+             Authenticode-signed and lives in a protected directory (Access is denied). -->
+        <requestedExecutionLevel level="asInvoker" uiAccess="false" />
       </requestedPrivileges>
     </security>
   </trustInfo>
+  <!-- Kept identical to app.manifest so Debug builds also run System-DPI-aware; the app lays
+       out its own window with AutoScaleMode.None and would otherwise be bitmap-scaled. -->
   <application xmlns="urn:schemas-microsoft-com:asm.v3">
     <windowsSettings>
       <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true</dpiAware>
